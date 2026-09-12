@@ -1,0 +1,8 @@
+pandas
+numpy
+scikit-learn
+networkx
+streamlit
+streamlit-geolocation
+pytest
+python-dotenv
