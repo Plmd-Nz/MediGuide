@@ -11,15 +11,21 @@ def formater_recommandation(recommandation):
         ("zonesante", "Zone de santé"),
         ("airesante", "Aire de santé"),
     ):
-        if recommandation.get(colonne):
+        if recommandation.get(colonne) and str(recommandation[colonne]).lower() != "nan":
             localisation.append(f"{libelle} : {recommandation[colonne]}")
 
+    type_structure = str(recommandation.get("esstype", "")).strip()
+    lits = recommandation.get("capacite_lits")
+
     lignes = [
-        f"{recommandation.get('rang', '?')}. {nom}",
+        f"{recommandation.get('rang', '?')}. {nom}" + (f" ({type_structure})" if type_structure and type_structure.lower() != "nan" else ""),
         f"Distance : {recommandation.get('distance_km', 0):.2f} km",
         f"Disponibilité : {recommandation.get('disponibilite', 'inconnue') or 'inconnue'}",
-        f"Coût d'orientation : {recommandation.get('cout_orientation', 0):.3f}",
     ]
+    if lits is not None and str(lits).strip() and str(lits) != "0":
+        lignes.append(f"Capacité d'accueil : {lits} lits")
+    lignes.append(f"Coût d'orientation : {recommandation.get('cout_orientation', 0):.3f}")
+
     if localisation:
         lignes.append("Localisation : " + ", ".join(localisation))
     return "\n".join(lignes)

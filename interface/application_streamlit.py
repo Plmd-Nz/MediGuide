@@ -1,11 +1,20 @@
 """Interface conversationnelle professionnelle de SIOM."""
 
 import sys
+import urllib.error
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+CHEMIN_ENV = ROOT / ".env"
+if CHEMIN_ENV.exists():
+    load_dotenv(CHEMIN_ENV, override=True)
+else:
+    load_dotenv(override=True)
 
 import streamlit as st
 
@@ -118,20 +127,22 @@ def charger_donnees():
     return st.session_state.donnees_siom
 
 
+def est_gemini_configure():
+    """Vérifie si la clé Gemini est présente et valide."""
+    try:
+        if CHEMIN_ENV.exists():
+            load_dotenv(CHEMIN_ENV, override=True)
+        client = ClientGemini()
+        return bool(client.cle_api)
+    except Exception:
+        return False
+
+
 def initialiser_session():
     """Initialise l'historique de conversation et la position."""
     st.session_state.setdefault("messages", [])
     st.session_state.setdefault("position", None)
-    st.session_state.setdefault("utiliser_gemini", False)
-
-
-def est_gemini_configure():
-    """Vérifie si la clé Gemini est présente."""
-    try:
-        ClientGemini()
-        return True
-    except ValueError:
-        return False
+    st.session_state.setdefault("utiliser_gemini", est_gemini_configure())
 
 
 def afficher_geolocalisation():
@@ -179,24 +190,58 @@ def afficher_position():
 
 
 def traiter_message(message, donnees, utiliser_gemini=False):
-    """Interprète une demande locale et calcule ses recommandations."""
+    """Interprète une demande et calcule ses recommandations."""
     if not st.session_state.position:
         return "Veuillez d'abord fournir votre position manuellement ou via le navigateur."
 
-    try:
-        if utiliser_gemini:
+    # Gestion des salutations polies et questions d'accueil
+    salutations = {
+        "bonjour", "bonsoir", "salut", "hello", "hi", "coucou",
+        "aide", "aidez-moi", "aide-moi", "qui es-tu", "qui es-tu ?", "bonjour !", "salut !"
+    }
+    if message.strip().lower() in salutations:
+        return (
+            "Bonjour ! 👋 Je suis l'assistant SIOM (Système Intelligent d'Orientation Médicale).\n\n"
+            "Pour que je puisse vous orienter vers la structure de santé la plus adaptée, "
+            "veuillez décrire vos symptômes ou votre besoin de santé (par exemple : "
+            "*fracture à la jambe*, *femme enceinte accouchement*, *paludisme et forte fièvre*, "
+            "*opération chirurgicale urgente*, *problème aux yeux*...)."
+        )
+
+    besoin = None
+    categories = []
+
+    if utiliser_gemini:
+        try:
             besoin, categories = interpreter_demande_gemini(message, donnees)
-        else:
-            besoin, categories = interpreter_demande_locale(message, donnees)
-    except Exception as erreur:
-        if utiliser_gemini:
-            st.warning("Gemini n'est pas disponible. Le moteur local SIOM est utilisé à la place.")
+        except (RuntimeError, urllib.error.URLError, urllib.error.HTTPError) as err:
+            # Erreur de connexion réelle à l'API Gemini
+            st.warning("⚠️ L'API Gemini est temporairement inaccessible. Le moteur local SIOM prend le relais.")
             try:
                 besoin, categories = interpreter_demande_locale(message, donnees)
-            except ValueError as erreur_locale:
-                return str(erreur_locale)
-        else:
-            return str(erreur)
+            except ValueError as err_locale:
+                return str(err_locale)
+        except ValueError as err_val:
+            # Gemini a répondu mais la saisie n'exprime pas un besoin médical identifiable
+            st.info(f"ℹ️ {err_val}")
+            try:
+                besoin, categories = interpreter_demande_locale(message, donnees)
+            except ValueError as err_locale:
+                return (
+                    "Votre demande n'a pas pu être associée à un besoin médical précis. "
+                    "Veuillez décrire vos symptômes (ex. : fracture, accouchement, chirurgie, fièvre...)."
+                )
+        except Exception as err:
+            st.warning("⚠️ Le moteur local SIOM a pris le relais.")
+            try:
+                besoin, categories = interpreter_demande_locale(message, donnees)
+            except ValueError as err_locale:
+                return str(err_locale)
+    else:
+        try:
+            besoin, categories = interpreter_demande_locale(message, donnees)
+        except ValueError as err_locale:
+            return str(err_locale)
 
     latitude, longitude = st.session_state.position
     recommandations = obtenir_recommandations(
@@ -229,13 +274,17 @@ def main():
 
     sidebar = st.sidebar
     sidebar.header("Paramètres")
-    if est_gemini_configure():
+    gemini_actif = est_gemini_configure()
+    if gemini_actif:
         st.session_state.utiliser_gemini = sidebar.toggle(
             "Utiliser Gemini pour structurer la demande",
-            value=False,
+            value=st.session_state.get("utiliser_gemini", True),
             help="Gemini interprète la phrase; le moteur SIOM calcule toujours le classement.",
         )
-        sidebar.caption("Mode intelligent actif : Gemini + moteur SIOM")
+        if st.session_state.utiliser_gemini:
+            sidebar.success("Mode intelligent actif : Gemini + SIOM")
+        else:
+            sidebar.info("Mode local actif : Moteur SIOM uniquement")
     else:
         st.session_state.utiliser_gemini = False
         sidebar.caption("Gemini non configuré. Le moteur local SIOM reste actif.")

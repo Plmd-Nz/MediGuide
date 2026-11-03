@@ -3,11 +3,15 @@
 import json
 import os
 import urllib.request
+from pathlib import Path
 
 from dotenv import load_dotenv
 
-
-load_dotenv()
+CHEMIN_ENV = Path(__file__).resolve().parents[1] / ".env"
+if CHEMIN_ENV.exists():
+    load_dotenv(CHEMIN_ENV, override=True)
+else:
+    load_dotenv(override=True)
 
 
 class ClientLLM:
@@ -26,16 +30,22 @@ class ClientGemini(ClientLLM):
     """Client Gemini facultatif, activé uniquement avec une clé API."""
 
     def __init__(self, cle_api=None, modele=None):
-        self.cle_api = cle_api or os.getenv("GEMINI_API_KEY")
-        self.modele = modele or os.getenv("GEMINI_MODEL") or "gemini-flash-latest"
+        if CHEMIN_ENV.exists():
+            load_dotenv(CHEMIN_ENV, override=True)
+        self.cle_api = (cle_api or os.getenv("GEMINI_API_KEY") or "").strip()
+        self.modele = (modele or os.getenv("GEMINI_MODEL") or "gemini-3.5-flash").strip()
         self.modeles_de_repli = [
             self.modele,
+            "gemini-3.5-flash",
+            "gemini-3.5-flash-lite",
             "gemini-flash-latest",
-            "gemini-2.0-flash",
-            "gemini-1.5-flash",
+            "gemini-3.1-flash-lite",
+            "gemini-3.8-flash",
         ]
         if not self.cle_api:
             raise ValueError("La variable GEMINI_API_KEY n'est pas configurée.")
+        # Évite les blocages de détection automatique de proxy WPAD sous Windows
+        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
     def _demander(self, prompt):
         dernier_erreur = None
@@ -59,14 +69,22 @@ class ClientGemini(ClientLLM):
                 method="POST",
             )
             try:
-                with urllib.request.urlopen(requete, timeout=20) as reponse:
+                with self._opener.open(requete, timeout=15) as reponse:
                     resultat = json.loads(reponse.read().decode("utf-8"))
-                return resultat["candidates"][0]["content"]["parts"][0]["text"]
+                candidates = resultat.get("candidates", [])
+                if not candidates:
+                    continue
+                parts = candidates[0].get("content", {}).get("parts", [])
+                if not parts or "text" not in parts[0]:
+                    continue
+                return parts[0]["text"]
             except Exception as erreur:
                 dernier_erreur = erreur
                 message = str(erreur).lower()
-                if "not found" not in message and "unsupported" not in message and "not available" not in message:
-                    raise
+                # En cas d'erreur de modèle indisponible (404, 503, 429, etc.), on tente le modèle suivant
+                if any(motif in message for motif in ("not found", "unsupported", "not available", "503", "429", "unavailable", "timeout", "timed out", "quota", "resource")):
+                    continue
+                continue
         raise RuntimeError(
             "Aucun modèle Gemini disponible pour cette clé API."
         ) from dernier_erreur
@@ -74,11 +92,14 @@ class ClientGemini(ClientLLM):
     def interpreter(self, texte, categories_autorisees):
         """Demande au LLM un JSON limité aux catégories autorisées."""
         prompt = (
-            "Tu es un extracteur de besoins d'orientation médicale, pas un outil de diagnostic. "
+            "Tu es un extracteur de besoins d'orientation médicale pour la RDC, pas un outil de diagnostic. "
             "Retourne uniquement un JSON de la forme "
-            '{"besoins":[{"categorie":"...","capacites":[],"services":[],"specialites":[]}]}.'
-            "N'utilise que les catégories, capacités, services et spécialités autorisés. "
-            f"Les valeurs autorisées sont : {json.dumps(categories_autorisees, ensure_ascii=False)}. "
+            '{"besoins":[{"categorie":"...","capacites":[],"services":[],"specialites":[]}]}.\n'
+            "RÈGLES IMPORTANTES :\n"
+            "1. N'utilise que les catégories, capacités, services et spécialités autorisés dans la liste fournie.\n"
+            f"2. Liste des valeurs autorisées : {json.dumps(categories_autorisees, ensure_ascii=False)}.\n"
+            "3. Si la demande exprime un besoin général de consultation, de soins ou une salutation orientée santé, "
+            'utilise au minimum : {"categorie":"Consultation générale","capacites":[],"services":["Consultation générale"],"specialites":["Médecine générale"]}.\n'
             f"Demande utilisateur : {texte}"
         )
         resultat = json.loads(self._demander(prompt))

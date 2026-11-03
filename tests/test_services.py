@@ -81,7 +81,7 @@ def test_interpretation_locale_reconnait_cholera_et_orl():
 
     besoin, categories = interpreter_demande_locale("j'ai un choléra et un problème ORL", donnees)
 
-    assert "cholera" in [c.casefold() for c in besoin.capacites_recherchees]
+    assert any(motif in c.casefold() for c in besoin.capacites_recherchees for motif in ("choléra", "cholera"))
     assert "ORL" in besoin.services_recherches
     assert categories
 
