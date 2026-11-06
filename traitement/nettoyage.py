@@ -12,13 +12,23 @@ COLONNES_LISTES = (
 )
 
 
-def charger_dataset(chemin_dataset):
+def charger_dataset(chemin_dataset, encodage="utf-8"):
 	"""Charge le fichier CSV source en conservant les valeurs textuelles."""
-	return pd.read_csv(
-		Path(chemin_dataset),
-		dtype=str,
-		keep_default_na=False,
-	)
+	chemin = Path(chemin_dataset)
+	try:
+		return pd.read_csv(
+			chemin,
+			dtype=str,
+			keep_default_na=False,
+			encoding=encodage,
+		)
+	except (UnicodeDecodeError, LookupError):
+		return pd.read_csv(
+			chemin,
+			dtype=str,
+			keep_default_na=False,
+			encoding="latin-1",
+		)
 
 
 def normaliser_noms_colonnes(donnees):

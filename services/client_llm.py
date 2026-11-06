@@ -33,21 +33,21 @@ class ClientGemini(ClientLLM):
         if CHEMIN_ENV.exists():
             load_dotenv(CHEMIN_ENV, override=True)
         self.cle_api = (cle_api or os.getenv("GEMINI_API_KEY") or "").strip()
-        self.modele = (modele or os.getenv("GEMINI_MODEL") or "gemini-3.5-flash").strip()
+        self.modele = (modele or os.getenv("GEMINI_MODEL") or "gemini-3.8-flash").strip()
         self.modeles_de_repli = [
             self.modele,
-            "gemini-3.5-flash",
             "gemini-3.5-flash-lite",
-            "gemini-flash-latest",
-            "gemini-3.1-flash-lite",
             "gemini-3.8-flash",
+            "gemini-3.5-flash",
+            "gemini-flash-lite-latest",
+            "gemini-3-flash-preview",
         ]
         if not self.cle_api:
             raise ValueError("La variable GEMINI_API_KEY n'est pas configurée.")
         # Évite les blocages de détection automatique de proxy WPAD sous Windows
         self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
-    def _demander(self, prompt):
+    def _demander(self, prompt, inline_data=None):
         dernier_erreur = None
         for modele in dict.fromkeys(self.modeles_de_repli):
             self.modele = modele
@@ -55,8 +55,13 @@ class ClientGemini(ClientLLM):
                 "https://generativelanguage.googleapis.com/v1beta/models/"
                 f"{self.modele}:generateContent?key={self.cle_api}"
             )
+            parts = []
+            if inline_data:
+                parts.append({"inlineData": inline_data})
+            parts.append({"text": prompt})
+
             donnees = {
-                "contents": [{"parts": [{"text": prompt}]}],
+                "contents": [{"parts": parts}],
                 "generationConfig": {
                     "temperature": 0,
                     "responseMimeType": "application/json",
@@ -69,7 +74,7 @@ class ClientGemini(ClientLLM):
                 method="POST",
             )
             try:
-                with self._opener.open(requete, timeout=15) as reponse:
+                with self._opener.open(requete, timeout=10) as reponse:
                     resultat = json.loads(reponse.read().decode("utf-8"))
                 candidates = resultat.get("candidates", [])
                 if not candidates:
@@ -105,6 +110,39 @@ class ClientGemini(ClientLLM):
         resultat = json.loads(self._demander(prompt))
         if not isinstance(resultat, dict) or not isinstance(resultat.get("besoins"), list):
             raise ValueError("Gemini a retourné une structure JSON inattendue.")
+        return resultat
+
+    def interpreter_audio(self, audio_bytes, mime_type, categories_autorisees):
+        """Comprend directement un enregistrement vocal en langue nationale ou français (Audio-to-Intent)."""
+        import base64
+        b64_audio = base64.b64encode(audio_bytes).decode("utf-8")
+        inline_data = {
+            "mimeType": mime_type or "audio/webm",
+            "data": b64_audio,
+        }
+        prompt = (
+            "Tu es l'assistant médical d'orientation multimodale SIOM pour la République Démocratique du Congo. "
+            "Écoute cet enregistrement audio où un patient ou un soignant décrit une situation de santé "
+            "(qui peut être exprimée en Lingala, Swahili, Kikongo, Tshiluba ou Français).\n\n"
+            "INSTRUCTIONS STRICTES :\n"
+            "1. Détecte la langue parlée (ex: 'Lingala', 'Swahili', 'Kikongo', 'Tshiluba' ou 'Français').\n"
+            "2. Transcris fidèlement les paroles dans le champ 'transcription'.\n"
+            "3. Résume le problème médical en français dans le champ 'resume_medical'.\n"
+            "4. Évalue le niveau d'urgence estimé dans le champ 'urgence' : 'rouge' (urgence vitale immédiate), "
+            "'jaune' (urgence médicale avérée), ou 'vert' (soins ambulatoires standard).\n"
+            "5. Extrais les besoins d'orientation médicale autorisés dans le champ 'besoins' "
+            'sous la forme : [{"categorie": "...", "capacites": [], "services": [], "specialites": []}].\n'
+            f"Valeurs autorisées : {json.dumps(categories_autorisees, ensure_ascii=False)}.\n"
+            "Si aucun terme spécifique n'est détecté, utilise au minimum la consultation générale.\n"
+            "6. Dans le champ 'guidance_vocale', rédige un message d'orientation rassurant, concis et clair "
+            "DANS LA LANGUE LOCALE DÉTECTÉE (Lingala, Swahili, etc.) pour guider la personne vers les secours ou la structure la plus proche.\n\n"
+            "Retourne uniquement un JSON valide avec ces 6 clés exactes : "
+            '{"langue": "...", "transcription": "...", "resume_medical": "...", "urgence": "rouge|jaune|vert", "besoins": [...], "guidance_vocale": "..."}'
+        )
+        brut = self._demander(prompt, inline_data=inline_data)
+        resultat = json.loads(brut)
+        if not isinstance(resultat, dict) or "besoins" not in resultat:
+            raise ValueError("Structure JSON inattendue reçue pour l'audio.")
         return resultat
 
     def reformuler(self, donnees_resultat):

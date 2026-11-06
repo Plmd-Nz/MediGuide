@@ -39,10 +39,13 @@ def formater_reponse_orientation(besoin, recommandations):
             f"pour le besoin d'orientation : {besoin.besoin_medical}."
         )
 
+    portee = recommandations[0].get("libelle_portee")
     contenu = [
         f"Demande interprétée comme : {besoin.besoin_medical}.",
-        "Voici les structures les mieux classées selon les données disponibles :",
     ]
+    if portee and portee != "Recherche directe":
+        contenu.append(f"Portée de recherche : {portee}.")
+    contenu.append("Voici les structures les mieux classées selon les données disponibles :")
     contenu.extend(formater_recommandation(recommandation) for recommandation in recommandations)
     contenu.append(
         "Ces résultats constituent une aide à l'orientation et ne remplacent pas l'avis d'un professionnel de santé."

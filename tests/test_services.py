@@ -77,7 +77,7 @@ def test_interpretation_gemini_rejette_une_reponse_sans_capacite_connue():
 
 
 def test_interpretation_locale_reconnait_cholera_et_orl():
-    donnees = pd.read_csv("donnees/dataset_prepare/dataset_prepare.csv")
+    donnees = pd.read_csv("donnees/dataset_prepare/dataset_prepare.csv", encoding="utf-8")
 
     besoin, categories = interpreter_demande_locale("j'ai un choléra et un problème ORL", donnees)
 
@@ -88,7 +88,7 @@ def test_interpretation_locale_reconnait_cholera_et_orl():
 
 def test_demandes_naturelles_du_dataset_produisent_des_recommandations():
     donnees = nettoyer_dataset(
-        pd.read_csv("donnees/dataset_prepare/dataset_prepare.csv")
+        pd.read_csv("donnees/dataset_prepare/dataset_prepare.csv", encoding="utf-8")
     )
     demandes = (
         "J'ai besoin d'une consultation générale",

@@ -1,8 +1,10 @@
-pandas
-numpy
-scikit-learn
-networkx
-streamlit
-streamlit-geolocation
-pytest
-python-dotenv
+# MediGuide - Dépendances du Backend REST FastAPI & Traitement Spatial
+fastapi>=0.110.0
+uvicorn>=0.28.0
+python-multipart>=0.0.9
+pandas>=2.2.0
+numpy>=1.26.0
+scikit-learn>=1.4.0
+networkx>=3.2.0
+python-dotenv>=1.0.0
+pytest>=8.0.0

@@ -1,0 +1,284 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand: #10B981;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+  --ease-ref: cubic-bezier(.22, 1, .36, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --background: #FFFFFF;
+  --foreground: #09090B;
+}
+
+html.dark {
+  --brand: #10B981;
+  --background: #09090B;
+  --foreground: #FAFAFA;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ==========================================================================
+   HALO AMBIANT HAUTE COUTURE
+   ========================================================================== */
+.ambient-canvas {
+  background: 
+    radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.06) 0%, rgba(255, 255, 255, 0) 58%),
+    radial-gradient(circle at 85% 20%, rgba(9, 9, 11, 0.02) 0%, rgba(255, 255, 255, 0) 45%);
+}
+
+html.dark .ambient-canvas {
+  background: 
+    radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.12) 0%, rgba(9, 9, 11, 0) 65%),
+    radial-gradient(circle at 85% 20%, rgba(16, 185, 129, 0.04) 0%, rgba(9, 9, 11, 0) 45%);
+}
+
+/* ==========================================================================
+   TITRE ROTATIF HAUTE COUTURE (.l1, .l2, .in, .out) — REQUIS PAR LE CLIENT
+   ========================================================================== */
+.l1, .l2 { display: block; }
+.l2 { 
+  color: var(--brand); 
+  min-height: 1.15em; 
+  overflow: hidden; 
+}
+.l2 b { 
+  display: block; 
+  font-weight: inherit; 
+}
+.l2 .in  { animation: up .7s var(--ease) both; }
+.l2 .out { animation: down .5s var(--ease) both; }
+
+@keyframes up {
+  from {
+    transform: translateY(105%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes down {
+  to {
+    transform: translateY(-105%);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .l2 .in, .l2 .out {
+    animation: none !important;
+  }
+}
+
+/* ==========================================================================
+   ÉTAPES FONCTIONNELLES (.steps, .st, .st-badge) — REQUIS PAR LE CLIENT
+   ========================================================================== */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  position: relative;
+}
+
+/* La ligne : invisible au départ (scaleX 0), elle part de la gauche */
+.steps::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 19px;
+  height: 2px;
+  background: #10B981;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 1.2s 0.2s var(--ease-ref);
+  z-index: 0;
+}
+.steps.on::before { transform: scaleX(1); }   /* la ligne s'étend */
+
+/* Les étapes : invisibles au départ, puis apparaissent l'une après l'autre */
+.st {
+  opacity: 0;
+  transition: opacity 0.6s var(--ease-ref);
+  position: relative;
+  z-index: 1;
+}
+.steps.on .st { opacity: 1; }
+.steps.on .st:nth-child(2) { transition-delay: 0.4s; }
+.steps.on .st:nth-child(3) { transition-delay: 0.8s; }
+
+/* Pastille numérotée (le halo blanc/noir "coupe" la ligne derrière) */
+.st-badge {
+  position: relative;
+  display: grid; place-items: center;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  border: 2px solid #10B981;
+  color: #059669;
+  font-weight: 700; font-size: 14px;
+  box-shadow: 0 0 0 6px #FFFFFF;
+}
+
+html.dark .st-badge {
+  background: #09090B;
+  border: 2px solid #10B981;
+  color: #34D399;
+  box-shadow: 0 0 0 6px #09090B;
+}
+
+/* Version mobile : la ligne devient verticale */
+@media (max-width: 860px) {
+  .steps { grid-template-columns: 1fr; }
+  .steps::before {
+    left: 19px; right: auto; top: 0; bottom: 0;
+    width: 2px; height: auto;
+    transform: scaleY(0);
+    transform-origin: top;
+  }
+  .steps.on::before { transform: scaleY(1); }
+  .st { padding-left: 60px; }
+  .st-badge { position: absolute; left: 0; top: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .steps::before { transition: none; transform: scaleX(1); }
+  .st { opacity: 1; transition: none; }
+}
+
+/* ==========================================================================
+   SPOTLIGHT CARD (EFFET CURSEUR LINEAR / CANVA MAGIC)
+   ========================================================================== */
+.spotlight-card {
+  position: relative;
+  background: #FFFFFF;
+  border-radius: 28px;
+  border: 1px solid rgba(9, 9, 11, 0.06);
+  overflow: hidden;
+  transition: transform 0.6s var(--ease-out-expo), box-shadow 0.6s var(--ease-out-expo), border-color 0.4s ease;
+}
+
+html.dark .spotlight-card {
+  background: #111113;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.spotlight-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    520px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(16, 185, 129, 0.07),
+    transparent 45%
+  );
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+html.dark .spotlight-card::before {
+  background: radial-gradient(
+    520px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(16, 185, 129, 0.16),
+    transparent 50%
+  );
+}
+
+.spotlight-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: 0 28px 65px -18px rgba(9, 9, 11, 0.07);
+}
+
+.spotlight-card:hover::before {
+  opacity: 1;
+}
+
+/* ==========================================================================
+   ORBE IA & ANIMATIONS D'ITINÉRAIRE GPS
+   ========================================================================== */
+@keyframes orbPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  50% { transform: scale(1.08); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+}
+.ai-orb {
+  animation: orbPulse 3s infinite var(--ease-out-expo);
+}
+
+@keyframes routeDraw {
+  from { stroke-dashoffset: 260; }
+  to { stroke-dashoffset: 0; }
+}
+.route-path-animated {
+  stroke-dasharray: 260;
+  stroke-dashoffset: 260;
+  animation: routeDraw 1.3s var(--ease-out-expo) forwards;
+}
+
+@keyframes radarSweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.radar-beam {
+  transform-origin: center;
+  animation: radarSweep 6s linear infinite;
+}
+
+/* ==========================================================================
+   FLOATING LABELS POUR LE PORTAIL AUTH
+   ========================================================================== */
+.floating-input:focus ~ .floating-label,
+.floating-input:not(:placeholder-shown) ~ .floating-label {
+  transform: translateY(-22px) scale(0.84);
+  color: #059669;
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   UTILITAIRES DIVERS
+   ========================================================================== */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+.kinetic-word {
+  display: inline-block;
+  will-change: transform, opacity, filter;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+html.light ::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+}

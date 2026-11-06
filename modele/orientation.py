@@ -4,12 +4,19 @@ from dataclasses import dataclass, field
 
 from modele.criteres import (
 	calculer_score_capacite,
+	calculer_score_capacite_affine,
 	calculer_score_disponibilite,
 	calculer_score_services,
+	calculer_score_services_affine,
 	calculer_score_specialites,
+	calculer_score_specialites_affine,
 )
 from modele.cout import calculer_cout_orientation
 from modele.distance import calculer_distance_haversine
+from modele.filtrage_spatial import (
+	LIBELLES_PORTEE,
+	prefiltrer_structures_par_palier,
+)
 from modele.graphe import construire_graphe, obtenir_classement_dijkstra
 from traitement.normalisation import (
 	normaliser_distances,
@@ -79,6 +86,7 @@ def obtenir_recommandations(
 	longitude_patient,
 	besoin,
 	nombre_recommandations=3,
+	filtrage_spatial=True,
 ):
 	"""Produit un classement explicable de structures adaptées au besoin."""
 	if not isinstance(besoin, BesoinMedical):
@@ -86,39 +94,60 @@ def obtenir_recommandations(
 	if nombre_recommandations < 1:
 		raise ValueError("Le nombre de recommandations doit être positif.")
 
-	structures_evaluees = []
-	for structure in _convertir_enregistrements(donnees):
-		score_capacite = calculer_score_capacite(
-			structure.get("capacite_prise_en_charge"),
-			besoin.capacites_recherchees,
+	enregistrements = _convertir_enregistrements(donnees)
+	if not enregistrements:
+		return []
+
+	palier_atteint = "direct"
+
+	# Pré-filtrage spatial progressif si des provinces sont présentes dans le dataset
+	a_provinces = any(bool(s.get("province")) for s in enregistrements)
+	if filtrage_spatial and a_provinces:
+		structures_evaluees, palier_atteint = prefiltrer_structures_par_palier(
+			enregistrements,
+			latitude_patient,
+			longitude_patient,
+			besoin,
 		)
-		if besoin.capacites_recherchees and score_capacite == 0.0:
-			continue
-
-		try:
-			distance_km = calculer_distance_haversine(
-				latitude_patient,
-				longitude_patient,
-				structure.get("lat"),
-				structure.get("lon"),
+	else:
+		structures_evaluees = []
+		for structure in enregistrements:
+			score_capacite = calculer_score_capacite(
+				structure.get("capacite_prise_en_charge"),
+				besoin.capacites_recherchees,
 			)
-		except ValueError:
-			continue
+			if besoin.capacites_recherchees and score_capacite == 0.0:
+				continue
 
-		structures_evaluees.append({
-			**structure,
-			"distance_km": distance_km,
-			"score_services": calculer_score_services(
-				structure.get("services"), besoin.services_recherches
-			),
-			"score_specialites": calculer_score_specialites(
-				structure.get("specialites"), besoin.specialites_recherchees
-			),
-			"score_capacite": score_capacite,
-			"score_disponibilite": calculer_score_disponibilite(
-				structure.get("disponibilite")
-			),
-		})
+			try:
+				distance_km = calculer_distance_haversine(
+					latitude_patient,
+					longitude_patient,
+					structure.get("lat"),
+					structure.get("lon"),
+				)
+			except ValueError:
+				continue
+
+			score_capacite_affine = calculer_score_capacite_affine(
+				structure.get("capacite_prise_en_charge"),
+				besoin.capacites_recherchees,
+				lits=structure.get("capacite_lits"),
+			)
+			structures_evaluees.append({
+				**structure,
+				"distance_km": distance_km,
+				"score_services": calculer_score_services_affine(
+					structure.get("services"), besoin.services_recherches
+				),
+				"score_specialites": calculer_score_specialites_affine(
+					structure.get("specialites"), besoin.specialites_recherchees
+				),
+				"score_capacite": score_capacite_affine,
+				"score_disponibilite": calculer_score_disponibilite(
+					structure.get("disponibilite")
+				),
+			})
 
 	if not structures_evaluees:
 		return []
@@ -149,12 +178,20 @@ def obtenir_recommandations(
 			structure["cout_disponibilite"],
 		)
 		structure["identifiant"] = structure.get("grid3id")
+		structure["portee_spatiale"] = palier_atteint
+		structure["libelle_portee"] = LIBELLES_PORTEE.get(palier_atteint, "Recherche directe")
 
 	graphe = construire_graphe(structures_evaluees)
-	return obtenir_classement_dijkstra(
+	classement = obtenir_classement_dijkstra(
 		graphe,
 		nombre_recommandations=nombre_recommandations,
 	)
+
+	for recommandation in classement:
+		recommandation["portee_spatiale"] = palier_atteint
+		recommandation["libelle_portee"] = LIBELLES_PORTEE.get(palier_atteint, "Recherche directe")
+
+	return classement
 
 
 def expliquer_recommandation(recommandation):
@@ -171,6 +208,8 @@ def expliquer_recommandation(recommandation):
 		f"disponibilité {recommandation['score_disponibilite']:.2f}. "
 		f"Son coût d'orientation est de {recommandation['cout_orientation']:.3f}."
 	)
+	if recommandation.get("libelle_portee") and recommandation.get("libelle_portee") != "Recherche directe":
+		explication += f" Portée : {recommandation['libelle_portee']}."
 
 	localisation = []
 	for colonne, libelle in (

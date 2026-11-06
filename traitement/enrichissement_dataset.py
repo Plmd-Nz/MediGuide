@@ -572,7 +572,10 @@ def assigner_profil(row):
 def enrichir_dataset(chemin_source, chemin_destination):
     """Enrichit le dataset avec des donnees medicales realistes et coherentes."""
     print(f"Chargement du dataset source : {chemin_source}")
-    df = pd.read_csv(chemin_source, dtype=str, keep_default_na=False)
+    try:
+        df = pd.read_csv(chemin_source, dtype=str, keep_default_na=False, encoding="utf-8")
+    except UnicodeDecodeError:
+        df = pd.read_csv(chemin_source, dtype=str, keep_default_na=False, encoding="latin-1")
     print(f"Nombre total de structures a traiter : {len(df)}")
 
     # Nettoyage prealable des colonnes
@@ -608,6 +611,7 @@ def enrichir_dataset(chemin_source, chemin_destination):
 
 
 if __name__ == "__main__":
-    SRC = Path("donnees/dataset_prepare/dataset_prepare.csv")
+    SRC_ORIGINAL = Path("donnees/dataset_original/GRID3_COD_health_facilities_v9_0_-2924174275266254925.csv")
     DEST = Path("donnees/dataset_prepare/dataset_prepare.csv")
+    SRC = SRC_ORIGINAL if SRC_ORIGINAL.exists() else DEST
     enrichir_dataset(SRC, DEST)
