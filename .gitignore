@@ -8,6 +8,8 @@
 .env.test.local
 .env.production.local
 !.env.example
+!Frontend/.env.production.example
+!*.example
 
 # ==============================================================================
 # Node.js & Next.js Frontend
